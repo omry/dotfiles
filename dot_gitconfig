@@ -1,0 +1,211 @@
+[color]
+  diff = auto
+  status = auto
+  branch = auto
+
+[alias]
+  wdiff = diff --color-words
+  lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative --all
+  l = log --pretty=format:'%Cgreen%h%Creset %s [%Cred%an%Creset] %cd'
+  lg1 = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all
+  lg2 = log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all
+
+   # Fast rebase; works even if the tree is dirty.
+  up = "!\
+MYBRANCH=$(git what-branch) && \
+git work-on master && \
+git pull --rebase && \
+git work-on $MYBRANCH && \
+git push-autostash && \
+git rebase master && \
+git pop-autostash \
+"
+
+  # Automatically stashes current changes and works on another branch
+  work-on = !sh -c "'\
+if [ \"$0\" = sh ]; then \
+  echo Usage: git work-on branchname; \
+  exit 1; \
+fi; \
+if [ \"$0\" = \"$(git what-branch)\" ]; then \
+  echo \"# Yup, working on $0.\"; \
+  exit 0; \
+fi; \
+git push-autostash && \
+git ensure-branch \"$0\" && \
+git pop-autostash \
+'"
+
+  # Pushes current commit into the repository and upon success deletes
+  # current branch and sets current branch to master.
+  arc-commit = !sh -c "'\
+if [ $0 = \"--revision\" ]; then \
+  REVISION=\"--revision $1\"; \
+fi; \
+THISBRANCH=$(git what-branch) && \
+/home/engshare/devtools/arcanist/bin/arc amend $REVISION && \
+git checkout master && \
+git cherry-pick -- $THISBRANCH -- && \
+git pull --rebase && \
+git push && \
+git branch -D $THISBRANCH \
+'"
+
+  # Commits changes and submits initial diff for review
+  arc-diff = !git commit -a && /home/engshare/devtools/arcanist/bin/arc diff
+
+  # Commits changes and submits subsequent diff for review
+  arc-rediff = !git commit -a --amend && /home/engshare/devtools/arcanist/bin/arc diff
+
+  # Abandons the current branch entirely
+  abandon-this-branch = "!\
+THISBRANCH=$(git what-branch) && \
+git stash save abandoned-$THISBRANCH && \
+git reset --hard HEAD && \
+git checkout master && \
+git branch -D $THISBRANCH \
+"
+
+  # Abandons the specified branch entirely
+  # Abandons the current branch entirely
+  abandon-this-branch = "!\
+THISBRANCH=$(git what-branch) && \
+git stash save abandoned-$THISBRANCH && \
+git reset --hard HEAD && \
+git checkout master && \
+git branch -D $THISBRANCH \
+"
+
+  # Abandons the specified branch entirely
+  abandon-branch = !sh -c "'\
+if [ \"$0\" = sh ]; then \
+  echo Usage: git abandon-branch branchname; \
+  exit 1; \
+fi; \
+THISBRANCH=$(git what-branch); \
+if [ \"$0\" = \"$THISBRANCH\" ]; then \
+  git abandon-this-branch; \
+else \
+  git is-branch $0 && \
+  git work-on $0 && \
+  git abandon-this-branch && \
+  git work-on $THISBRANCH; \
+fi \
+'"
+
+  # Shows the formerly abandoned branches along with instructions on
+  # how to revive them.
+  fml = "!\
+if git stash list --date=default | grep -q -m 1 -s ': abandoned-'; then \
+  echo \"# Take a look at your abandoned branches below.\" \
+    \"To revive a branch, use 'git stash branch <branchname> stash@{nnn}'\" && \
+  git stash list --date=default | grep ': abandoned-'; \
+fi \
+"
+
+# The following macros are helpers for higher level artifacts, but can
+# also be used individually
+
+  # Prints current branch, with optional prefix and suffix, and returns 0.
+  # If not on a branch, prints nothing and returns nonzero.
+  # Example (assuming you're on branch 'br'):
+  # git what-branch -> prints br
+  # git what-branch '(' ')' -> prints (br)
+  # The affixes are useful if e.g. you want to use this inside your prompt.
+  what-branch = "!sh -c '\
+if [ $0 = sh ]; then P0=\"\"; else P0=$0; fi; \
+WHATBRANCH=$(git branch --no-color 2>/dev/null | sed -e \"/^[^*]/d\" -e \"s/* //\"); \
+[ \"$WHATBRANCH\" != \"(no branch)\" ] || WHATBRANCH=\"\"; \
+[ ! -z \"$WHATBRANCH\" ] && echo \"$P0$WHATBRANCH$1\" \
+'"
+
+  # Is this a branch? Yields 0 if so, nonzero otherwise. Example: git
+  # is-branch foo yields 0 if foo is the name of a branch, 1 if not.
+  is-branch = !sh -c "'\
+if [ \"$0\" = sh ]; then \
+  echo Usage: git is-branch somename; \
+  exit 1; \
+fi; \
+git branch --no-color 2>/dev/null | grep -q \"$0\" \
+'"
+
+  # If the branch exists, checks it out. Otherwise, creates it as a
+  # new branch of master.
+  ensure-branch = !sh -c "'\
+if [ \"$0\" = sh ]; then P0=\"\"; else P0=\"$0\"; fi; \
+if git is-branch \"$P0\"; then \
+  git checkout \"$P0\"; \
+else \
+  git checkout -b \"$P0\" master; \
+fi \
+'"
+
+  # Stashes current branch with a specific cookie
+  push-autostash = !git stash save autostash-$(git what-branch)
+
+  # If push-autostash cookie present, pops that
+  pop-autostash = "!\
+INDEX=$(git stash list --date=default | grep autostash-$(git what-branch) | head -n1 \
+            | sed 's/^stash@{\\([0-9][0-9]*\\)}.*/\\1/'); \
+if [ -z \"$INDEX\" ]; then \
+   echo 'Nothing to pop-autostash'; \
+else \
+   git stash pop \"stash@{$INDEX}\"; \
+fi \
+"
+
+ br = branch -v
+  co = checkout
+  ci = commit
+  di = diff
+  st = status
+  # Show the commits and content in this branch
+  showbr = log --pretty=oneline trunk..
+  showallbr = log -U trunk ..
+  # Change the HEAD commit message to the template and edit
+  amd = !git commit --amend -eF `git config commit.template`
+  # Safe remove all branches reachable from HEAD.  Good way to GC old branches after dcommit/rebase
+  gcbr = !git branch --no-track --no-color --merged | sed 's/[ *]*//' | xargs -n1 git branch -d &> /dev/null || exit 0
+  # Spellcheck your commit message
+  aspell = !git log --pretty=format:%s%n%n%b -n1 > /tmp/aspell.txt && aspell -c /tmp/aspell.txt && git commit --amend -F /tmp/aspell.txt
+  # Commit changes to current head as amended commit
+  plus = commit --amend -a -C HEAD
+  # Commit changes on *top* of current head as a checkpoint commit
+  cp = commit -am 'cp'
+  # Grep with color and line numbers
+  gr = grep -n
+  # color doesn't work with my old git :(--color -n
+  # Push to the sandcastle server
+  sandpush = !git push -f ssh://sandcastle.facebook.com/data/git/tfb HEAD:refs/users/`whoami`
+
+[svn]
+  followparent = true
+
+# Dear god, please change these if you borrow my gitconfig
+[user]
+	name = Omry Yadan
+	email = omry@fb.com
+
+[push]
+  default = tracking
+
+# Show a log of '56 minutes ago' rather than 'November 12, 2008 12:34:53'
+[log]
+  date = relative
+
+# Use only for black background terminal
+[color "branch"]
+  current = yellow reverse
+  local = yellow 
+  remote = green
+[color "diff"]
+  plain = white
+  meta = yellow bold
+  frag = magenta bold
+  old = red bold
+  new = green bold
+  whitespace = red blink
+[color "status"]
+  added = yellow
+  changed = green
+  untracked = cyan
