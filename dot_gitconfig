@@ -1,3 +1,8 @@
+# Dear god, please change these if you borrow my gitconfig
+[user]
+	name = Omry Yadan
+	email = omry@fb.com
+
 [color]
   diff = auto
   status = auto
@@ -181,10 +186,6 @@ fi \
 [svn]
   followparent = true
 
-# Dear god, please change these if you borrow my gitconfig
-[user]
-	name = Omry Yadan
-	email = omry@fb.com
 
 [push]
   default = tracking
