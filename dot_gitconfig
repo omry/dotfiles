@@ -1,7 +1,7 @@
 # Dear god, please change these if you borrow my gitconfig
 [user]
 	name = Omry Yadan
-	email = omry@fb.com
+	email = omry@yadan.net
 
 [color]
   diff = auto
